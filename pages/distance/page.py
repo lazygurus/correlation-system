@@ -5,7 +5,7 @@ from PyQt5.QtCore import Qt
 from qfluentwidgets import BodyLabel
 
 from ui.Ui_distance_page import Ui_distance_page
-from pages.distance.controllers import add_tab, close_tab, load_data
+from pages.distance.controllers import add_tab, close_tab, upload_data, download_data
 
 
 class DistanceInterface(QWidget, Ui_distance_page):
@@ -54,5 +54,6 @@ class DistanceInterface(QWidget, Ui_distance_page):
         """
         self.tabBar.tabCloseRequested.connect(lambda index: close_tab(self, index))
         self.stackedWidget.currentChanged.connect(lambda index: self.tabBar.setCurrentIndex(index))
-        self.loadFileButton.clicked.connect(lambda: load_data(self, "originalData", "原始数据", icon='assets/icon/book.png'))
-        self.loadDistButton.clicked.connect(lambda: load_data(self, "distanceData", "距离数据", icon='assets/icon/book.png'))
+        self.uploadFileButton.clicked.connect(lambda: upload_data(self, "originalData", "原始数据", icon='assets/icon/book.png'))
+        self.uploadDistButton.clicked.connect(lambda: upload_data(self, "distanceData", "距离数据", icon='assets/icon/book.png'))
+        self.downloadDistButton.clicked.connect(lambda: download_data(self))
