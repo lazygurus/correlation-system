@@ -22,13 +22,16 @@
 
 1. 克隆项目到本地：
 ```bash
-git clone <repository-url>
-cd relation
+git clone https://github.com/lazygurus/correlation-system
+cd correlation-system
 ```
 
 2. 安装依赖：
 ```bash
-pip install -r requirements.txt
+conda create -n pyqt python=3.11
+conda install numpy
+conda install pandas
+pip install "PyQt-Fluent-Widgets[full]" -i https://pypi.org/simple/  # 这一步会安装 pyqt5
 ```
 
 3. 运行应用程序：
