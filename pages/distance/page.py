@@ -5,7 +5,7 @@ from PyQt5.QtCore import Qt
 from qfluentwidgets import BodyLabel
 
 from ui.Ui_distance_page import Ui_distance_page
-from pages.distance.controllers import add_tab, close_tab, upload_data, download_data
+from pages.distance.controllers import Controllers
 
 
 class DistanceInterface(QWidget, Ui_distance_page):
@@ -14,7 +14,10 @@ class DistanceInterface(QWidget, Ui_distance_page):
     """
     def __init__(self, parent=None):
         super().__init__(parent)
-        
+
+        # 实例化控制器
+        self.controllers = Controllers(self)
+
         # 初始化 UI
         self.setupUi(self)
         self.setObjectName("distance_page")
@@ -33,8 +36,8 @@ class DistanceInterface(QWidget, Ui_distance_page):
         label.setAlignment(Qt.AlignCenter)
         layout.addWidget(label)
         widget.setLayout(layout)
-        add_tab(self, widget, "home", "主页", icon='assets/icon/book.png')
-    
+        self.controllers.add_tab(widget, "home", "主页", icon='assets/icon/book.png')
+
     def set_style(self):
         """ 
         设置页面样式
@@ -52,8 +55,8 @@ class DistanceInterface(QWidget, Ui_distance_page):
         """
         设置槽函数
         """
-        self.tabBar.tabCloseRequested.connect(lambda index: close_tab(self, index))
+        self.tabBar.tabCloseRequested.connect(lambda index: self.controllers.close_tab(index))
         self.stackedWidget.currentChanged.connect(lambda index: self.tabBar.setCurrentIndex(index))
-        self.uploadFileButton.clicked.connect(lambda: upload_data(self, "originalData", "原始数据", icon='assets/icon/book.png'))
-        self.uploadDistButton.clicked.connect(lambda: upload_data(self, "distanceData", "距离数据", icon='assets/icon/book.png'))
-        self.downloadDistButton.clicked.connect(lambda: download_data(self))
+        self.uploadFileButton.clicked.connect(lambda: self.controllers.upload_data("originalData", "原始数据", icon='assets/icon/book.png'))
+        self.uploadDistButton.clicked.connect(lambda: self.controllers.upload_data("distanceData", "距离数据", icon='assets/icon/book.png'))
+        self.downloadDistButton.clicked.connect(lambda: self.controllers.download_data())
