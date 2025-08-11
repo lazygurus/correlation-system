@@ -4,13 +4,14 @@ import numpy as np
 from PyQt5.QtWidgets import QWidget, QFileDialog
 from PyQt5.QtCore import Qt
 
-from core.loader import uploader, downloader
+from core.loader import FileLoader
 from pages.distance.widgets import tableWidget
 
 
 class Controllers:
     def __init__(self, parent):
         self.parent = parent
+        self.loader = FileLoader()
         
     def add_tab(self, widget, object_name: str, text: str, icon: str = "assets/icon/book.png"):
         """
@@ -53,7 +54,7 @@ class Controllers:
         file_path, _ = QFileDialog.getOpenFileName(self.parent, "选择文件", "", "CSV Files (*.csv);;Text Files (*.txt)")
         if file_path:
             # 读取文件数据
-            self.parent.data, self.parent.rows, self.parent.cols = uploader(file_path)
+            self.parent.data, self.parent.rows, self.parent.cols = self.loader.upload(file_path)
             if self.parent.data is not None:
                 # 添加表格到堆叠组件
                 table = tableWidget()
@@ -78,7 +79,7 @@ class Controllers:
 
         file_path, _ = QFileDialog.getSaveFileName(self.parent, "保存文件", "", "CSV Files (*.csv);;Text Files (*.txt)")
         if file_path:
-            result = downloader(self.parent.data, self.parent.rows, self.parent.cols, file_path)
+            result = self.loader.download(self.parent.data, self.parent.rows, self.parent.cols, file_path)
             return result
         else:
             print("未选择保存路径。")
