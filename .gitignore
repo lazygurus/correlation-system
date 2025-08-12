@@ -1,4 +1,6 @@
+# python 编译缓存
 __pycache__/
+
 .vscode/
 start.ps1
 data/
