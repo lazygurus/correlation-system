@@ -23,12 +23,9 @@ def gaussian_discretization_fast(df: pd.DataFrame, sigma: float = 1.0, bins: int
     data = df.to_numpy()
 
     # 每行均值与标准差
-    mu = data.mean(axis=1, keepdims=True)
-    std = data.std(axis=1, keepdims=True) + 1e-12
-    print(mu.shape, std.shape)
-    mu = mu.squeeze()  # (387,)
-    std = std.squeeze()  # (387,)
-    print(mu.shape, std.shape)
+    mu = data.mean(axis=1)
+    std = data.std(axis=1) + 1e-12
+
     # 在 z-score 空间生成中心点
     z_centers = np.linspace(-3, 3, bins)  # (bins,)
     centers = mu[None, :]  + std[None, :]  * z_centers[:, None]  # shape: (bins, n_samples)
@@ -46,7 +43,7 @@ def gaussian_discretization_fast(df: pd.DataFrame, sigma: float = 1.0, bins: int
         result = z_centers[idx]
     else:
         # 转换 idx → 对应原值中心
-        result = np.take_along_axis(centers.T[:, :, None], idx[:, :, None], axis=1).squeeze(1)
+        result = np.take_along_axis(centers.T, idx, axis=1)
 
     return pd.DataFrame(result, index=df.index, columns=df.columns)
 
@@ -96,8 +93,3 @@ def compute_distance_matrix(df: pd.DataFrame, method: str = "euclidean", sigma: 
         return information_distance(discretized_df)
     else:
         raise ValueError(f"未知的距离计算方法: {method}")
-
-if __name__ == "__main__":
-    df = pd.read_csv("D:\python\Relevance_System\data\statisticsData.txt" , encoding="gbk" , sep="\t" ,index_col=0)
-    pd = gaussian_discretization_fast(df)
-    print(pd)

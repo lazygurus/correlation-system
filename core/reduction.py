@@ -1,7 +1,6 @@
 import numpy as np
 from sklearn.manifold import MDS
 
-
 def reduce_dimension(distance_matrix: np.ndarray, n_components: int = 2, random_state: int = 42) -> np.ndarray:
     """
     使用 MDS 将距离矩阵降维到二维
@@ -16,3 +15,4 @@ def reduce_dimension(distance_matrix: np.ndarray, n_components: int = 2, random_
     )
     coords = mds.fit_transform(distance_matrix)
     return coords
+
