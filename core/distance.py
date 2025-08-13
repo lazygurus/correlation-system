@@ -1,63 +1,90 @@
 import numpy as np
+import pandas as pd
 from sklearn.metrics import pairwise_distances
 from scipy.stats import entropy
 
-def gaussian_discretization(data: np.ndarray, sigma: float = 1.0, bins: int = 7) -> np.ndarray:
+def zscore_standardize(df: pd.DataFrame) -> pd.DataFrame:
     """
-    基于标准差的高斯离散化
-    data: 原始二维数据 (样本 × 特征)
-    sigma: 高斯核的标准差
-    bins: 离散等级数量（默认 7 → 对应 -3 ~ 3）
+    按列做 Z-score 标准化
     """
-    discretized = np.zeros_like(data, dtype=float)
+    return (df - df.mean(axis=0)) / (df.std(axis=0) + 1e-12)
 
-    for i in range(data.shape[1]):  # 按列（特征）处理
-        mu = data[:, i].mean()
-        std = data[:, i].std() + 1e-12  # 防止除0
 
-        # 在 z-score 空间生成中心点（-3 ~ 3 均分）
-        z_centers = np.linspace(-3, 3, bins)
-        centers = mu + z_centers * std  # 转回原值空间
-
-        # 遍历样本，匹配高斯权重最大值的中心
-        for j in range(data.shape[0]):
-            weights = np.exp(-0.5 * ((data[j, i] - centers) / sigma) ** 2)
-            discretized[j, i] = centers[np.argmax(weights)]
-
-    return discretized
-
-def information_distance(data: np.ndarray) -> np.ndarray:
+def gaussian_discretization_fast(df: pd.DataFrame, sigma: float = 1.0, bins: int = 7,
+                                 return_zscore: bool = True) -> pd.DataFrame:
     """
-    计算信息距离矩阵 (基于KL散度的对称度量)
+    高斯离散化（按行均值和标准差，自适应离散化），向量化加速版
+    df: 原始 DataFrame
+    sigma: 高斯核标准差
+    bins: 离散等级数量（默认 7 => z-score 中 -3~3）
+    return_zscore: True 返回离散等级，False 返回原值中心
     """
-    n_samples = data.shape[0]
+    data = df.to_numpy()
+    n_samples, n_features = data.shape
+
+    # 每行均值与标准差
+    mu = data.mean(axis=1, keepdims=True)
+    std = data.std(axis=1, keepdims=True) + 1e-12
+
+    # 在 z-score 空间生成中心点
+    z_centers = np.linspace(-3, 3, bins)  # (bins,)
+    centers = mu + std * z_centers[:, None]  # shape: (bins, n_samples)
+
+    # 广播计算权重
+    # data: (n_samples, n_features)
+    # centers.T: (n_samples, bins) → 需要扩展成 (n_samples, bins, 1)
+    diff = data[:, None, :] - centers.T[:, :, None]  # (n_samples, bins, n_features)
+    weights = np.exp(-0.5 * (diff / sigma) ** 2)  # (n_samples, bins, n_features)
+
+    # 找到最大权重对应的索引
+    idx = np.argmax(weights, axis=1)  # (n_samples, n_features)
+
+    if return_zscore:
+        result = z_centers[idx]
+    else:
+        # 转换 idx → 对应原值中心
+        result = np.take_along_axis(centers.T[:, :, None], idx[:, :, None], axis=1).squeeze(1)
+
+    return pd.DataFrame(result, index=df.index, columns=df.columns)
+
+
+def information_distance(df: pd.DataFrame) -> np.ndarray:
+    """
+    计算信息距离矩阵（基于对称 KL 散度）
+    使用 softmax 保证输入为概率分布
+    """
+    data = df.to_numpy()
+    shifted = data - np.max(data, axis=1, keepdims=True)
+    exp_data = np.exp(shifted)
+    prob_data = exp_data / (exp_data.sum(axis=1, keepdims=True) + 1e-12)
+
+    n_samples = prob_data.shape[0]
     dist_matrix = np.zeros((n_samples, n_samples))
-
-    # 转为概率分布
-    prob_data = data / (data.sum(axis=1, keepdims=True) + 1e-12)
 
     for i in range(n_samples):
         for j in range(i + 1, n_samples):
             kl_ij = entropy(prob_data[i], prob_data[j])
             kl_ji = entropy(prob_data[j], prob_data[i])
-            dist = 0.5 * (kl_ij + kl_ji)  # 对称化
+            dist = 0.5 * (kl_ij + kl_ji)
             dist_matrix[i, j] = dist
             dist_matrix[j, i] = dist
 
     return dist_matrix
 
-def compute_distance_matrix(data: np.ndarray, method: str = "euclidean", sigma: float = 1.0) -> np.ndarray:
+
+def compute_distance_matrix(df: pd.DataFrame, method: str = "euclidean", sigma: float = 1.0, bins: int = 7,
+                            return_zscore: bool = True) -> np.ndarray:
     """
     计算距离矩阵
-    method: "euclidean" 或 "information"
-    sigma: 高斯离散化标准差
+    method:
+        - "euclidean": 用标准化数据计算欧式距离
+        - "information": 用离散化数据计算信息距离
     """
-    # 高斯离散化
-    discretized_data = gaussian_discretization(data, sigma=sigma)
-
     if method == "euclidean":
-        return pairwise_distances(discretized_data, metric="euclidean")
+        standardized_df = zscore_standardize(df)
+        return pairwise_distances(standardized_df, metric="euclidean")
     elif method == "information":
-        return information_distance(discretized_data)
+        discretized_df = gaussian_discretization_fast(df, sigma=sigma, bins=bins, return_zscore=return_zscore)
+        return information_distance(discretized_df)
     else:
         raise ValueError(f"未知的距离计算方法: {method}")
