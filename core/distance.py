@@ -82,7 +82,7 @@ def compute_distance_matrix(df: pd.DataFrame, method: str = "euclidean", sigma: 
         - "information": 用离散化数据计算信息距离
     """
     if method == "euclidean":
-        standardized_df = zscore_standardize(df)
+        standardized_df = zscore_standardize_rows(df)
         return pairwise_distances(standardized_df, metric="euclidean")
     elif method == "information":
         discretized_df = gaussian_discretization_fast(df, sigma=sigma, bins=bins, return_zscore=return_zscore)
