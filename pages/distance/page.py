@@ -17,6 +17,11 @@ class DistanceInterface(QWidget, Ui_distance_page):
 
         # 实例化控制器
         self.controllers = Controllers(self)
+        
+        # 设初始数据为 None
+        self.data = None
+        self.distance = None
+        self.coordinate = None
 
         # 初始化 UI
         self.setupUi(self)
@@ -57,6 +62,6 @@ class DistanceInterface(QWidget, Ui_distance_page):
         """
         self.tabBar.tabCloseRequested.connect(lambda index: self.controllers.close_tab(index))
         self.stackedWidget.currentChanged.connect(lambda index: self.tabBar.setCurrentIndex(index))
-        self.uploadFileButton.clicked.connect(lambda: self.controllers.upload_data("originalData", "原始数据", icon='assets/icon/book.png'))
-        self.uploadDistButton.clicked.connect(lambda: self.controllers.upload_data("distanceData", "距离数据", icon='assets/icon/book.png'))
-        self.downloadDistButton.clicked.connect(lambda: self.controllers.download_data())
+        self.uploadFileButton.clicked.connect(lambda: self.controllers.upload_data("data"))
+        self.uploadDistButton.clicked.connect(lambda: self.controllers.upload_data("distance"))
+        self.downloadDistButton.clicked.connect(lambda: self.controllers.download_data("distance"))
