@@ -3,12 +3,13 @@ import pandas as pd
 from sklearn.metrics import pairwise_distances
 from scipy.stats import entropy
 
-def zscore_standardize(df: pd.DataFrame) -> pd.DataFrame:
+def zscore_standardize_rows(df: pd.DataFrame) -> pd.DataFrame:
     """
-    按列做 Z-score 标准化
+    按行做 Z-score 标准化
     """
-    return (df - df.mean(axis=0)) / (df.std(axis=0) + 1e-12)
-
+    row_mean = df.mean(axis=1).values.reshape(-1, 1)  # 每行均值
+    row_std = (df.std(axis=1) + 1e-12).values.reshape(-1, 1)  # 每行标准差
+    return (df - row_mean) / row_std
 
 def gaussian_discretization_fast(df: pd.DataFrame, sigma: float = 1.0, bins: int = 7,
                                  return_zscore: bool = True) -> pd.DataFrame:
