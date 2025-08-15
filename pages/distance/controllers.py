@@ -5,7 +5,9 @@ from PyQt5.QtWidgets import QWidget, QFileDialog
 from PyQt5.QtCore import Qt
 
 from core.loader import FileLoader
-from pages.distance.widgets import tableWidget
+from core.distance import compute_distance_matrix, gaussian_discretization_fast
+from core.reduction import reduce_dimension
+from pages.distance.widgets import tableWidget, PlotWidget
 
 
 class Controllers:
@@ -44,18 +46,19 @@ class Controllers:
         self.parent.tabBar.removeTab(index)
         widget.deleteLater()
 
+    # 导入功能
     def upload_data(self, type: str):
         """
         加载文件数据到表格组件
-        
-        :param type: str, 数据类型: 1.原始数据 2.距离数据 3.坐标
+
+        :param type: str, 数据类型: 1.原始数据 2.欧氏距离数据 3.信息距离数据 4.坐标
         """
-        allowed_type = {"data", "distance", "coordinate"}
+        allowed_type = {"data", "eudistance", "infodistance", "coordinates"}
         if type not in allowed_type:
             print("数据类型不合理")
             return False
-        
-        tab_title = {"data": "原始数据", "distance": "距离", "coordinate": "坐标"}  # 不同类型数据对应的 tab 栏标题
+
+        tab_title = {"data": "原始数据", "eudistance": "欧氏距离", "infodistance": "信息距离", "coordinates": "坐标"}  # 不同类型数据对应的 tab 栏标题
         file_path, _ = QFileDialog.getOpenFileName(self.parent, "选择文件", "", "CSV Files (*.csv);;Text Files (*.txt)")
         if file_path:
             # 读取文件数据
@@ -74,19 +77,20 @@ class Controllers:
             print("未选择文件。")
             return False
 
+    # 导出功能
     def download_data(self, type:str):
         """
         将表格数据保存到文件
         """
-        allowed_type = {"data", "distance", "coordinate"}
+        allowed_type = {"eudistance", "infodistance", "coordinates", "discretized_data"}
         if type not in allowed_type:
-            print("数据类型不合理")
+            print(f"不支持的数据: {type}")
             return False
         
         # 获取当前类型的数据
         data = getattr(self.parent, type)
         if data is None:
-            print("没有可下载的数据。")
+            print(f"{type} 数据为空，无法下载。")
             return False
 
         file_path, _ = QFileDialog.getSaveFileName(self.parent, "保存文件", "", "CSV Files (*.csv);;Text Files (*.txt)")
@@ -96,3 +100,98 @@ class Controllers:
         else:
             print("未选择保存路径。")
             return False
+    
+    # 离散化
+    def discretize(self, data):
+        """
+        对数据进行高斯离散化
+        
+        :param data: pandas DataFrame，包含数据
+        """
+        if data is None or data.empty:
+            print("数据为空，无法进行离散化。")
+            return False
+
+        # 进行高斯离散化
+        discretized_data = gaussian_discretization_fast(data)
+        self.parent.discretized_data = discretized_data  # 保存离散化后的数据到页面
+        table = tableWidget()
+        table.addItem(discretized_data)
+        self.add_tab(table, "discretized_data", "离散化数据", icon="assets/icon/book.png")
+        return True
+
+    # 计算距离
+    def compute_distance(self, data, euclidean: bool = False, information: bool = False):
+        """
+        计算数据的距离矩阵
+        
+        :param data: pandas DataFrame，包含数据
+        :return: 距离矩阵
+        """
+        if data is None or data.empty:
+            print("数据为空，无法计算距离矩阵。")
+            return False
+        
+        if not euclidean and not information:
+            print("请至少选择一种距离计算方式。")
+            return False
+        
+        # 计算欧氏距离矩阵
+        if euclidean:
+            eudist = compute_distance_matrix(data, method="euclidean")
+            self.parent.eudistance = eudist  # 保存欧氏距离矩阵到页面
+            table = tableWidget()
+            table.addItem(eudist)
+            self.add_tab(table, "eudistance", "欧氏距离", icon="assets/icon/book.png")
+            return True
+
+        if information:
+            # 计算信息距离矩阵
+            infodist = compute_distance_matrix(data, method="information")
+            self.parent.infodistance = infodist  # 保存信息距离矩阵到页面
+            table = tableWidget()
+            table.addItem(infodist)
+            self.add_tab(table, "infodistance", "信息距离", icon="assets/icon/book.png")
+            return True
+
+        return False
+    
+    # 降维
+    def reduce(self, distance):
+        """
+        使用 MDS 将距离矩阵降维到二维
+
+        :param distance: 预先计算好的距离矩阵
+        """
+        if distance is None or distance.empty:
+            print("距离矩阵为空，无法进行降维。")
+            return False
+        
+        # 降维并保存
+        coords = reduce_dimension(distance)
+        self.parent.coordinates = coords
+        
+        # 添加标签页
+        table = tableWidget()
+        table.addItem(coords)
+        self.add_tab(table, "coordinates", "坐标", icon="assets/icon/book.png")
+
+    # 绘图
+    def plot_coordinates(self, coordinates):
+        """
+        绘制坐标点
+
+        :param coordinates: pandas DataFrame，包含坐标数据
+        """
+        if coordinates is None or not isinstance(coordinates, pd.DataFrame):
+            print("坐标数据无效")
+            return
+
+        if coordinates.empty:
+            print("坐标数据为空")
+            return
+
+        # 创建绘图组件
+        plot_widget = PlotWidget()
+        plot_widget.plotPoints(coordinates)
+        self.add_tab(plot_widget, "plot", "坐标图", icon="assets/icon/book.png")
