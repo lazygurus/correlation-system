@@ -15,6 +15,7 @@ def gaussian_discretization_fast(df: pd.DataFrame, sigma: float = 1.0, bins: int
                                  return_zscore: bool = True) -> pd.DataFrame:
     """
     高斯离散化（按行均值和标准差，自适应离散化），向量化加速版
+    
     df: 原始 DataFrame
     sigma: 高斯核标准差
     bins: 离散等级数量（默认 7 => z-score 中 -3~3）
@@ -48,32 +49,42 @@ def gaussian_discretization_fast(df: pd.DataFrame, sigma: float = 1.0, bins: int
     return pd.DataFrame(result, index=df.index, columns=df.columns)
 
 
-def information_distance(df: pd.DataFrame) -> np.ndarray:
-    """
-    计算信息距离矩阵（基于对称 KL 散度）
-    使用 softmax 保证输入为概率分布
-    """
-    data = df.to_numpy()
-    shifted = data - np.max(data, axis=1, keepdims=True)
-    exp_data = np.exp(shifted)
-    prob_data = exp_data / (exp_data.sum(axis=1, keepdims=True) + 1e-12)
+def information_distance(discrete_df: pd.DataFrame, base: float = 2.0, ignore_na: bool=True) -> pd.DataFrame:
+    rows = []
+    for _, row in discrete_df.iterrows():
+        c, _ = pd.factorize(row, sort=False)  # NaN→-1
+        rows.append(c.astype(np.int64))
+    X = np.stack(rows, axis=0)
+    n = X.shape[0]
+    out = np.zeros((n, n), dtype=float)
 
-    n_samples = prob_data.shape[0]
-    dist_matrix = np.zeros((n_samples, n_samples))
+    for i in range(n):
+        for j in range(i, n):
+            xi, xj = X[i], X[j]
+            if ignore_na:
+                m = (xi >= 0) & (xj >= 0)
+                xi, xj = xi[m], xj[m]
+            if xi.size == 0:
+                vij = np.nan
+            elif i == j:
+                vij = 0.0
+            else:
+                Ai, Aj = xi.max()+1, xj.max()+1
+                cont = np.zeros((Ai, Aj), dtype=np.int64)
+                np.add.at(cont, (xi, xj), 1)
+                # H(X), H(Y), H(X,Y)
+                Hx  = entropy(cont.sum(axis=1), base=base)
+                Hy  = entropy(cont.sum(axis=0), base=base)
+                Hxy = entropy(cont.ravel(),      base=base)
+                # 或者用 I：mi_nats = mutual_info_score(None, None, contingency=cont)
+                vij = 2*Hxy - Hx - Hy
+            out[i, j] = out[j, i] = vij
 
-    for i in range(n_samples):
-        for j in range(i + 1, n_samples):
-            kl_ij = entropy(prob_data[i], prob_data[j])
-            kl_ji = entropy(prob_data[j], prob_data[i])
-            dist = 0.5 * (kl_ij + kl_ji)
-            dist_matrix[i, j] = dist
-            dist_matrix[j, i] = dist
-
-    return dist_matrix
+    return pd.DataFrame(out, index=discrete_df.index, columns=discrete_df.index)
 
 
-def compute_distance_matrix(df: pd.DataFrame, method: str = "euclidean", sigma: float = 1.0, bins: int = 7,
-                            return_zscore: bool = True) -> np.ndarray:
+def compute_distance_matrix(df: pd.DataFrame, method: str, sigma: float = 1.0, bins: int = 7,
+                            return_zscore: bool = True) -> pd.DataFrame:
     """
     计算距离矩阵
     method:
@@ -86,8 +97,10 @@ def compute_distance_matrix(df: pd.DataFrame, method: str = "euclidean", sigma: 
         df = df.set_index(df.columns[0])  # 把第一列作为索引
 
     if method == "euclidean":
-        standardized_df = zscore_standardize_rows(df)
-        return pairwise_distances(standardized_df, metric="euclidean")
+        # standardized_df = zscore_standardize_rows(df)
+        eudistance = pairwise_distances(df, metric="euclidean")
+        return pd.DataFrame(eudistance, index=df.index, columns=df.index)
+        
     elif method == "information":
         discretized_df = gaussian_discretization_fast(df, sigma=sigma, bins=bins, return_zscore=return_zscore)
         return information_distance(discretized_df)
