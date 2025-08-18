@@ -8,3 +8,6 @@ PyQt5-tools>=5.15.0
 # Data Processing
 numpy>=2.3.0
 pandas>=2.3.0
+
+# Plotting
+matplotlib>=3.7.0

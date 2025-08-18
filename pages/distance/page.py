@@ -17,6 +17,13 @@ class DistanceInterface(QWidget, Ui_distance_page):
 
         # 实例化控制器
         self.controllers = Controllers(self)
+        
+        # 设初始数据为 None
+        self.data = None
+        self.discretized_data = None
+        self.eudistance = None
+        self.infodistance = None
+        self.coordinates = None
 
         # 初始化 UI
         self.setupUi(self)
@@ -55,8 +62,31 @@ class DistanceInterface(QWidget, Ui_distance_page):
         """
         设置槽函数
         """
+        # 标签栏切换
         self.tabBar.tabCloseRequested.connect(lambda index: self.controllers.close_tab(index))
         self.stackedWidget.currentChanged.connect(lambda index: self.tabBar.setCurrentIndex(index))
-        self.uploadFileButton.clicked.connect(lambda: self.controllers.upload_data("originalData", "原始数据", icon='assets/icon/book.png'))
-        self.uploadDistButton.clicked.connect(lambda: self.controllers.upload_data("distanceData", "距离数据", icon='assets/icon/book.png'))
-        self.downloadDistButton.clicked.connect(lambda: self.controllers.download_data())
+        # 导入按钮
+        self.uploadDataButton.clicked.connect(lambda: self.controllers.upload_data("data"))
+        self.uploadEuDistButton.clicked.connect(lambda: self.controllers.upload_data("eudistance"))
+        self.uploadInfoDistButton.clicked.connect(lambda: self.controllers.upload_data("infodistance"))
+        self.uploadCoordButton.clicked.connect(lambda: self.controllers.upload_data("coordinate"))
+        # 离散化按钮
+        self.discreteDataButton.clicked.connect(lambda: self.controllers.discretize(self.data))
+        # 计算距离按钮
+        self.calDistButton.clicked.connect(
+            lambda: self.controllers.compute_distance(
+                self.data,
+                euclidean=self.euDistSwitch.isChecked(),
+                information=self.infoDistSwitch.isChecked()
+            )
+        )
+        # 降维按钮
+        self.reduceDimButton.clicked.connect(lambda: self.controllers.reduce(self.eudistance))
+        self.reduceDimButton.clicked.connect(lambda: self.controllers.reduce(self.infodistance))
+        # 绘图按钮
+        self.drawButton.clicked.connect(lambda: self.controllers.plot_coordinates(self.coordinates))
+        # 导出按钮
+        self.downloadEuDistButton.clicked.connect(lambda: self.controllers.download_data("eudistance"))
+        self.downloadInfoDistButton.clicked.connect(lambda: self.controllers.download_data("infodistance"))
+        self.downloadCoordButton.clicked.connect(lambda: self.controllers.download_data("coordinate"))
+        self.downloadDiscreteDataButton.clicked.connect(lambda: self.controllers.download_data("discretized_data"))
