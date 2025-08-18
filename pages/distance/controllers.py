@@ -7,7 +7,7 @@ from PyQt5.QtCore import Qt
 from core.loader import FileLoader
 from core.distance import compute_distance_matrix, gaussian_discretization_fast
 from core.reduction import reduce_dimension
-from pages.distance.widgets import tableWidget, PlotWidget
+from pages.distance.widgets import tableWidget, PlotWidget, FileDialog
 
 
 class Controllers:
@@ -59,7 +59,7 @@ class Controllers:
             return False
 
         tab_title = {"data": "原始数据", "eudistance": "欧氏距离", "infodistance": "信息距离", "coordinates": "坐标"}  # 不同类型数据对应的 tab 栏标题
-        file_path, _ = QFileDialog.getOpenFileName(self.parent, "选择文件", "", "CSV Files (*.csv);;Text Files (*.txt)")
+        file_path, _ = FileDialog.getOpenFileName(self.parent, "选择文件", "", "CSV Files (*.csv);;Text Files (*.txt)")
         if file_path:
             # 读取文件数据
             data = self.loader.upload(file_path)
@@ -93,7 +93,7 @@ class Controllers:
             print(f"{type} 数据为空，无法下载。")
             return False
 
-        file_path, _ = QFileDialog.getSaveFileName(self.parent, "保存文件", "", "CSV Files (*.csv);;Text Files (*.txt)")
+        file_path, _ = FileDialog.getSaveFileName(self.parent, "保存文件", "", "CSV Files (*.csv);;Text Files (*.txt)")
         if file_path:
             result = self.loader.download(data, file_path)
             return result

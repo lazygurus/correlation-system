@@ -1,13 +1,48 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout
+from PyQt5.QtGui import QShowEvent
+from PyQt5.QtWidgets import QWidget, QApplication, QVBoxLayout, QFileDialog
 from PyQt5.QtCore import Qt, QAbstractTableModel, QModelIndex
+
 from qfluentwidgets import TableView
+
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from matplotlib import rcParams
-import numpy as np
 
+
+class FileDialog(QFileDialog):
+    def __init___(self, parent):
+        super().__init__(parent)
+        
+    def showEvent(self, a0: QShowEvent) -> None:
+        super().showEvent(a0)
+        self.setCenter(self.parent())
+
+    def setCenter(self, parent):
+        """
+        设置对话框的中心位置
+        :param center: 中心点坐标 (x, y)
+        """
+        if not self.isVisible():
+            self.adjustSize()
+                
+        # 以父窗口中心为目标点
+        parent_center = parent.frameGeometry().center()
+
+        # 把对话框的几何框移动到该中心
+        g = self.frameGeometry()
+        g.moveCenter(parent_center)
+
+        # 防止越界到屏幕外：按父窗口所在屏幕裁剪
+        screen = parent.screen() or QApplication.screenAt(parent_center) or QApplication.primaryScreen()
+        sgeo = screen.availableGeometry()
+        tl = g.topLeft()
+        x = max(sgeo.left(),  min(tl.x(), sgeo.right()  - g.width()  + 1))
+        y = max(sgeo.top(),   min(tl.y(), sgeo.bottom() - g.height() + 1))
+        self.move(x, y)
+    
 
 class DataFrameModel(QAbstractTableModel):
     """
