@@ -1,6 +1,6 @@
 import sys
 
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QFileDialog
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QFileDialog, QStyle
 from PyQt5.QtCore import Qt, QRect
 from PyQt5.QtGui import QStandardItem, QStandardItemModel
 
@@ -16,20 +16,25 @@ class MainWindow(FluentWindow):
         self.distance_Interface = DistanceInterface(self.stackedWidget)
         self.addSubInterface(self.distance_Interface, FluentIcon.SETTING, "距离可视化")
         
-        self.resize_and_center()
+        self.resize_and_center(0.7, 0.8)
 
-    def resize_and_center(self):
+    def resize_and_center(self, width_frac=0.8, height_frac=0.8):
+        """
+        设置窗口大小并居中
+
+        :param width_frac: 窗口宽度占屏幕可用区域的比例
+        :param height_frac: 窗口高度占屏幕可用区域的比例
+        """
         screen = QApplication.screenAt(self.pos())
         screen_geo: QRect = screen.availableGeometry()
 
-        w = screen_geo.width() // 2
-        h = screen_geo.height() // 2
+        # 设置窗口大小，最小宽度为300，最小高度为200
+        tw = max(300, int(screen_geo.width()  * width_frac))
+        th = max(200, int(screen_geo.height() * height_frac))
+        self.resize(tw, th)
 
-        self.resize(w, h)
-        self.move(
-            screen_geo.x() + (screen_geo.width() - w) // 2,
-            screen_geo.y() + (screen_geo.height() - h) // 2
-        )
+        rect = QStyle.alignedRect(Qt.LeftToRight, Qt.AlignCenter, self.size(), screen_geo)
+        self.move(rect.topLeft())
 
 
 if __name__ == "__main__":
