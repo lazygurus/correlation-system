@@ -19,7 +19,7 @@ def gaussian_discretization_fast(df: pd.DataFrame, sigma: float = 1.0, bins: int
 
     df: 原始 DataFrame
     sigma: 高斯核标准差
-    bins: 离散等级数量（默认 7 => z-score 中 -3~3）
+    bins: 离散等级数量（默认 13 => z-score 中 -3~3）
     return_zscore: True 返回离散等级，False 返回原值中心
     """
     data = df.to_numpy()
@@ -91,7 +91,7 @@ def information_distance(discrete_df: pd.DataFrame, base: float = 2.0, ignore_na
     return pd.DataFrame(out, index=discrete_df.index, columns=discrete_df.index)
 
 
-def compute_distance_matrix(df: pd.DataFrame, method: str, sigma: float = 1.0, bins: int = 7,
+def compute_distance_matrix(df: pd.DataFrame, method: str, sigma: float = 1.0, bins: int = 13,
                             return_zscore: bool = True) -> pd.DataFrame:
     """
     计算距离矩阵
