@@ -163,55 +163,78 @@ class tableWidget(QWidget):
 
 class PlotWidget(QWidget):
     """
-    集成matplotlib的绘图组件，可以绘制点坐标散点图
-    
-    :function plotPoints: 传入包含点坐标的 pandas DataFrame 可以绘制散点图
+    集成matplotlib的绘图组件，支持点选择、距离计算、撤销和缩放功能
+
+    :function plotPoints: 传入包含点坐标的pandas DataFrame绘制散点图
     :function clearPlot: 清空当前绘图
     :function setTitle: 设置图表标题
     :function setAxisLabels: 设置坐标轴标签
     """
-    
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        
+
+        # 设置中文字体
         rcParams["font.family"] = "sans-serif"
-        rcParams["font.sans-serif"] = ["Microsoft YaHei", "SimHei", "Noto Sans CJK SC"]  # 任选其一系统已安装即可
+        rcParams["font.sans-serif"] = ["Microsoft YaHei", "SimHei", "Noto Sans CJK SC"]
         rcParams["axes.unicode_minus"] = False  # 负号正常显示
-                
+
         # 创建matplotlib图形和画布
         self.figure = Figure(figsize=(8, 6), dpi=100)
         self.canvas = FigureCanvas(self.figure)
         self.axes = self.figure.add_subplot(111)
-        
+
         # 设置布局
         self.vlayout = QVBoxLayout(self)
         self.vlayout.addWidget(self.canvas)
         self.setLayout(self.vlayout)
-        
+
         # 设置默认样式
         self.figure.patch.set_facecolor('white')
         self.axes.grid(True, alpha=0.3)
         self.axes.set_axisbelow(True)
-        
+
         # 初始化默认标签
         self.axes.set_xlabel('X坐标')
         self.axes.set_ylabel('Y坐标')
         self.axes.set_title('散点图')
-        
-    def plotPoints(self, coordinates: pd.DataFrame, x_col=None, y_col=None, 
-                   color='blue', marker='o', size=50, alpha=0.7, label=None):
-        """
-        绘制点坐标散点图
+        self.hint_text = self.axes.text(
+            0.01, 0.01,  # 位置（左下角，相对坐标）
+            "按 Z 键撤销标注",
+            fontsize=14,
+            color='green',
+            transform=self.axes.transAxes,  # 使用相对坐标（0-1 范围）
+            verticalalignment='bottom',  # 垂直对齐方式
+            bbox=dict(facecolor='white', edgecolor='none', alpha=0.7)  # 白色背景框，增加可读性
+        )
 
-        :param coordinates: 包含坐标数据的 pandas DataFrame
-        :param x_col: x坐标列名，如果为None则使用第一列
-        :param y_col: y坐标列名，如果为None则使用第二列
-        :param color: 点的颜色
-        :param marker: 点的标记样式
-        :param size: 点的大小
-        :param alpha: 透明度
-        :param label: 图例标签
-        """
+        # 交互功能变量初始化
+        self.scatter = None  # 散点图对象
+        self.coordinates = None  # 存储坐标数据
+        self.names = None  # 点名称
+        self.x_col = None  # x列名
+        self.y_col = None  # y列名
+
+        # 交互状态变量
+        self.selected_indices = []  # 当前选中的点索引
+        self.annotations = []  # 所有标注对象
+        self.lines = []  # 所有连接线
+        self.point_labels = []  # 点标签
+        self.operations = []  # 操作历史记录
+
+        # 绑定事件
+        self.cid_pick = self.canvas.mpl_connect('pick_event', self.on_pick)
+        self.cid_key = self.canvas.mpl_connect('key_press_event', self.on_key)
+        self.cid_scroll = self.canvas.mpl_connect('scroll_event', self.on_scroll)
+
+        # 确保画布获得焦点以接收键盘事件
+        self.canvas.setFocusPolicy(Qt.StrongFocus)
+        self.canvas.setFocus()
+
+    def plotPoints(self, coordinates: pd.DataFrame, x_col=None, y_col=None,
+                   color='skyblue', marker='o', size=50, alpha=0.7, label=None,
+                   names=None):
+        """绘制点坐标散点图，支持交互选择和距离计算"""
         if coordinates is None or not isinstance(coordinates, pd.DataFrame):
             print("数据无效，请传入有效的 pandas DataFrame")
             return
@@ -219,147 +242,262 @@ class PlotWidget(QWidget):
         if coordinates.empty:
             print("DataFrame 为空")
             return
-            
+
+        # 保存数据供交互使用
+        self.coordinates = coordinates.copy()
+        self.names = coordinates.index.tolist()
+
         # 确定 x和 y列
         columns = coordinates.columns.tolist()
         if len(columns) < 2:
             print("DataFrame 至少需要两列数据作为x和y坐标")
             return
-            
+
         if x_col is None:
             x_col = columns[0]
         if y_col is None:
             y_col = columns[1]
-            
+
         if x_col not in columns or y_col not in columns:
             print(f"指定的列名不存在。可用列: {columns}")
             return
-            
+
+        # 保存列名
+        self.x_col = x_col
+        self.y_col = y_col
+
         try:
             # 获取 x和 y数据
-            x_data = coordinates[x_col]
-            y_data = coordinates[y_col]
+            x_data = coordinates[x_col].to_numpy()
+            y_data = coordinates[y_col].to_numpy()
 
-            # 清空之前的绘图
-            self.axes.clear()
-            
-            # 绘制散点图
-            scatter = self.axes.scatter(x_data, y_data, c=color, marker=marker, 
-                                      s=size, alpha=alpha, label=label)
-            
-            print("YES")
-            
+            # 清空之前的绘图和状态
+            self.clearPlot()
+
+            # 绘制散点图，开启拾取功能
+            self.scatter = self.axes.scatter(
+                x_data, y_data,
+                c=color, marker=marker,
+                s=size, alpha=alpha,
+                label=label,
+                picker=True  # 开启拾取功能
+            )
+
             # 重新设置标签和网格
             self.axes.set_xlabel(x_col)
             self.axes.set_ylabel(y_col)
             self.axes.set_title('散点图')
             self.axes.grid(True, alpha=0.3)
-            self.axes.set_axisbelow(True)
-            
+
             # 如果有标签，显示图例
             if label:
                 self.axes.legend()
-            
+
             # 刷新画布
             self.canvas.draw()
-            
+            print(f"已绘制 {len(x_data)} 个点，等待交互...")
+
         except Exception as e:
             print(f"绘图时发生错误: {str(e)}")
-            
-    def addPoints(self, dataframe: pd.DataFrame, x_col=None, y_col=None,
-                  color='red', marker='s', size=50, alpha=0.7, label=None):
-        """
-        在现有图上添加新的点（不清空之前的绘图）
-        参数同plotPoints方法
-        """
-        if dataframe is None or not isinstance(dataframe, pd.DataFrame):
-            print("数据无效，请传入有效的 pandas DataFrame")
-            return
-            
-        if dataframe.empty:
-            print("DataFrame 为空")
-            return
-            
-        # 确定x和y列
-        columns = dataframe.columns.tolist()
-        if len(columns) < 2:
-            print("DataFrame 至少需要两列数据作为x和y坐标")
-            return
-            
-        if x_col is None:
-            x_col = columns[0]
-        if y_col is None:
-            y_col = columns[1]
-            
-        if x_col not in columns or y_col not in columns:
-            print(f"指定的列名不存在。可用列: {columns}")
-            return
-            
-        try:
-            # 获取x和y数据
-            x_data = dataframe[x_col]
-            y_data = dataframe[y_col]
-            
-            # 添加散点图（不清空之前的内容）
-            scatter = self.axes.scatter(x_data, y_data, c=color, marker=marker,
-                                      s=size, alpha=alpha, label=label)
-            
-            # 如果有标签，更新图例
-            if label:
-                self.axes.legend()
-                
-            # 自动调整坐标轴范围
-            self.axes.relim()
-            self.axes.autoscale_view()
-            
-            # 刷新画布
-            self.canvas.draw()
-            
-        except Exception as e:
-            print(f"添加点时发生错误: {str(e)}")
-    
+
     def clearPlot(self):
         """清空当前绘图"""
         self.axes.clear()
-        # 重新设置默认样式
+        self.scatter = None
+        self.selected_indices = []
+        self.annotations = []
+        self.lines = []
+        self.point_labels = []
+        self.operations = []
+        # 重置标签
+        self.axes.set_xlabel(self.x_col if self.x_col else 'X坐标')
+        self.axes.set_ylabel(self.y_col if self.y_col else 'Y坐标')
         self.axes.grid(True, alpha=0.3)
-        self.axes.set_axisbelow(True)
-        self.axes.set_xlabel('X坐标')
-        self.axes.set_ylabel('Y坐标')
-        self.axes.set_title('散点图')
+        # 保留提示
+        self.hint_text = self.axes.text(
+            0.01, 0.01,
+            "按Z键撤销标注",
+            fontsize=14,
+            color='green',
+            transform=self.axes.transAxes,
+            verticalalignment='bottom',
+            bbox=dict(facecolor='white', edgecolor='none', alpha=0.7)
+        )
         self.canvas.draw()
-        
-    def setTitle(self, title):
+
+    def setTitle(self, title: str):
         """设置图表标题"""
         self.axes.set_title(title)
         self.canvas.draw()
-        
-    def setAxisLabels(self, xlabel, ylabel):
+
+    def setAxisLabels(self, x_label: str, y_label: str):
         """设置坐标轴标签"""
-        self.axes.set_xlabel(xlabel)
-        self.axes.set_ylabel(ylabel)
+        self.axes.set_xlabel(x_label)
+        self.axes.set_ylabel(y_label)
+        self.x_col = x_label
+        self.y_col = y_label
         self.canvas.draw()
-        
-    def savePlot(self, filename, dpi=300, bbox_inches='tight'):
-        """
-        保存图表到文件
-        :param filename: 保存的文件名
-        :param dpi: 图像分辨率
-        :param bbox_inches: 边界框设置
-        """
-        try:
-            self.figure.savefig(filename, dpi=dpi, bbox_inches=bbox_inches)
-            print(f"图表已保存到: {filename}")
-        except Exception as e:
-            print(f"保存图表时发生错误: {str(e)}")
-            
-    def setPlotStyle(self, style='default'):
-        """
-        设置绘图样式
-        :param style: matplotlib样式名称，如 'seaborn', 'ggplot', 'dark_background' 等
-        """
-        try:
-            plt.style.use(style)
-            self.canvas.draw()
-        except Exception as e:
-            print(f"设置样式时发生错误: {str(e)}")
+
+    # 点击事件回调：选择点并计算距离
+    def on_pick(self, event):
+        # 确保我们只处理散点图的拾取事件
+        if self.scatter is None or event.artist != self.scatter:
+            return
+
+        # 忽略滚轮等其他事件   mouseevent———— 1-左键  2-滚轮  3-右键
+        if hasattr(event, 'mouseevent') and event.mouseevent.button != 1:
+            return  # 不是左键点击，直接返回，不处理
+
+        # 获取点击的点索引
+        ind = event.ind[0]
+
+        # 防止重复选择同一点
+        if ind in self.selected_indices:
+            return
+
+        # 添加到选中列表
+        self.selected_indices.append(ind)
+        print(f"选中点索引: {ind}，当前选中 {len(self.selected_indices)} 个点")
+
+        # 获取点数据
+        x_data = self.coordinates[self.x_col].to_numpy()
+        y_data = self.coordinates[self.y_col].to_numpy()
+
+        # 将选中的点设为红色
+        colors = ['red' if i in self.selected_indices else 'skyblue' for i in range(len(x_data))]
+        self.scatter.set_color(colors)
+
+        # 显示点信息
+        label = self.axes.text(
+            x_data[ind], y_data[ind],
+            f"{self.names[ind]}\n({x_data[ind]:.3f},{y_data[ind]:.3f})",
+            fontsize=9, color='blue', fontweight='bold'
+        )
+        self.point_labels.append(label)
+
+        # 当选中2个点时，绘制连接线和距离
+        if len(self.selected_indices) == 2:
+            i, j = self.selected_indices
+
+            # 计算距离
+            dist = np.sqrt((x_data[i] - x_data[j]) ** 2 + (y_data[i] - y_data[j]) ** 2)
+
+            # 绘制连接线
+            line, = self.axes.plot(
+                [x_data[i], x_data[j]], [y_data[i], y_data[j]],
+                color='blue', linewidth=1.5
+            )
+            self.lines.append(line)
+
+            # 显示距离
+            mid_x = (x_data[i] + x_data[j]) / 2
+            mid_y = (y_data[i] + y_data[j]) / 2
+            annot = self.axes.text(
+                mid_x, mid_y, f"距离: {dist:.3f}",
+                color='blue', fontsize=10, fontweight='bold'
+            )
+            self.annotations.append(annot)
+
+            # 记录操作历史
+            self.operations.append({
+                'points': self.selected_indices.copy(),
+                'line': line,
+                'annotation': annot,
+                'labels': [self.point_labels[-2], self.point_labels[-1]]
+            })
+
+            # 重置选中状态，准备下一次选择
+            self.selected_indices = []
+
+        # 更新显示
+        self.canvas.draw()
+
+    # 键盘事件：撤销上一次操作
+    def on_key(self, event):
+        if event.key == 'z':  # 撤销
+            if not self.operations and not self.selected_indices:
+                print("没有可撤销的操作")
+                return
+
+            # 处理未完成的选择（只选了一个点）
+            if self.selected_indices:
+                print(f"撤销未完成的选择，清除 {len(self.selected_indices)} 个点")
+                # 清除选中状态
+                if self.point_labels:
+                    for label in self.point_labels[-len(self.selected_indices):]:
+                        label.remove()
+                    del self.point_labels[-len(self.selected_indices):]
+
+                # 恢复点颜色
+                x_data = self.coordinates[self.x_col].to_numpy()
+                colors = ['skyblue'] * len(x_data)
+                self.scatter.set_color(colors)
+
+                # 重置选中列表
+                self.selected_indices = []
+                self.canvas.draw()
+                return
+
+            # 处理已完成的操作
+            if self.operations:
+                last_op = self.operations.pop()
+                print(f"撤销上一次操作，清除 {len(last_op['points'])} 个点的标记")
+
+                # 移除连接线
+                if last_op['line'] in self.lines:
+                    last_op['line'].remove()            # 删除图像
+                    self.lines.remove(last_op['line'])  # 删除内存中的线
+
+                # 移除距离标注
+                if last_op['annotation'] in self.annotations:
+                    last_op['annotation'].remove()
+                    self.annotations.remove(last_op['annotation'])
+
+                # 移除点标签
+                for label in last_op['labels']:
+                    if label in self.point_labels:
+                        label.remove()
+                        self.point_labels.remove(label)
+
+                # 恢复点颜色
+                x_data = self.coordinates[self.x_col].to_numpy()
+                colors = ['skyblue'] * len(x_data)
+                self.scatter.set_color(colors)
+
+                self.canvas.draw()
+
+    # 鼠标滚轮事件：实现缩放功能
+    def on_scroll(self, event):
+        # 获取当前坐标轴范围
+        cur_xlim = self.axes.get_xlim()
+        cur_ylim = self.axes.get_ylim()
+
+        # 获取鼠标在数据坐标系中的位置
+        if event.xdata is None or event.ydata is None:
+            return  # 鼠标在绘图区域外时不响应
+
+        xdata = event.xdata
+        ydata = event.ydata
+
+        # 缩放因子
+        scale_factor = 1.1
+        if event.button == 'down':
+            scale_factor = 1 / scale_factor
+
+        # 计算新的坐标轴范围
+        new_width = (cur_xlim[1] - cur_xlim[0]) / scale_factor
+        new_height = (cur_ylim[1] - cur_ylim[0]) / scale_factor
+
+        # 计算新的起点
+        new_x_start = xdata - (xdata - cur_xlim[0]) / scale_factor
+        new_y_start = ydata - (ydata - cur_ylim[0]) / scale_factor
+
+        # 设置新的范围
+        self.axes.set_xlim(new_x_start, new_x_start + new_width)
+        self.axes.set_ylim(new_y_start, new_y_start + new_height)
+
+        self.canvas.draw()
+
+
+# 为了确保PyQt的焦点设置生效，需要导入Qt
+from PyQt5.QtCore import Qt
