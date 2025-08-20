@@ -7,6 +7,8 @@ from qfluentwidgets import BodyLabel
 from ui.Ui_distance_page import Ui_distance_page
 from pages.distance.controllers import Controllers
 
+import pandas as pd
+
 
 class DistanceInterface(QWidget, Ui_distance_page):
     """
@@ -19,11 +21,11 @@ class DistanceInterface(QWidget, Ui_distance_page):
         self.controllers = Controllers(self)
         
         # 设初始数据为 None
-        self.data = None
-        self.discretized_data = None
-        self.eudistance = None
-        self.infodistance = None
-        self.coordinates = None
+        self.data = pd.DataFrame()
+        self.discretized_data = pd.DataFrame()
+        self.eudistance = pd.DataFrame()
+        self.infodistance = pd.DataFrame()
+        self.coordinates = pd.DataFrame()
 
         # 初始化 UI
         self.setupUi(self)
@@ -69,7 +71,7 @@ class DistanceInterface(QWidget, Ui_distance_page):
         self.uploadDataButton.clicked.connect(lambda: self.controllers.upload_data("data"))
         self.uploadEuDistButton.clicked.connect(lambda: self.controllers.upload_data("eudistance"))
         self.uploadInfoDistButton.clicked.connect(lambda: self.controllers.upload_data("infodistance"))
-        self.uploadCoordButton.clicked.connect(lambda: self.controllers.upload_data("coordinate"))
+        self.uploadCoordButton.clicked.connect(lambda: self.controllers.upload_data("coordinates"))
         # 离散化按钮
         self.discreteDataButton.clicked.connect(lambda: self.controllers.discretize(self.data))
         # 计算距离按钮
@@ -88,5 +90,5 @@ class DistanceInterface(QWidget, Ui_distance_page):
         # 导出按钮
         self.downloadEuDistButton.clicked.connect(lambda: self.controllers.download_data("eudistance"))
         self.downloadInfoDistButton.clicked.connect(lambda: self.controllers.download_data("infodistance"))
-        self.downloadCoordButton.clicked.connect(lambda: self.controllers.download_data("coordinate"))
+        self.downloadCoordButton.clicked.connect(lambda: self.controllers.download_data("coordinates"))
         self.downloadDiscreteDataButton.clicked.connect(lambda: self.controllers.download_data("discretized_data"))
